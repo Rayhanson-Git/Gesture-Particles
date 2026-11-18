@@ -107,8 +107,8 @@ export const ThreeScene = forwardRef<SceneHandle, ThreeSceneProps>(function Thre
       if (st.forceField) {
         const right = hands.rightHand;
         if (right.isDetected && right.isOpen) {
-          // the same orientation as the hand rings: the camera picture is not mirrored
-          force = onPlane((right.palm.x - 0.5) * 2, -(right.palm.y - 0.5) * 2);
+          // mirrored, like the camera preview and the hand rings, so the field sits under your palm
+          force = onPlane((0.5 - right.palm.x) * 2, -(right.palm.y - 0.5) * 2);
         } else if (!hands.leftHand.isDetected && !right.isDetected && pointerRef.current) {
           force = onPlane(pointerRef.current.x, pointerRef.current.y);
         }

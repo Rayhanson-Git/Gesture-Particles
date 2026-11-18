@@ -91,6 +91,11 @@ function drawPreview(video: HTMLVideoElement, results: HandsResults) {
     lastSize = size;
   }
   const W = canvas.width, H = canvas.height;
+  // Shown as a mirror, like any selfie camera: move your right hand right and
+  // it moves right on screen. The landmarks are drawn in the same flipped frame.
+  ctx.save();
+  ctx.translate(W, 0);
+  ctx.scale(-1, 1);
   ctx.drawImage(video, 0, 0, W, H);
 
   results.multiHandLandmarks?.forEach((landmarks, i) => {
@@ -140,6 +145,7 @@ function drawPreview(video: HTMLVideoElement, results: HandsResults) {
       ctx.restore();
     }
   });
+  ctx.restore();
 }
 
 // ------------------------------------------------------------------- hook

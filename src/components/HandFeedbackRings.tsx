@@ -3,8 +3,9 @@ import * as THREE from 'three';
 import type { HandTrackingData } from '../tracking/useHandTracking';
 import type { Landmark } from '../gestures/handMath';
 
+// The scene is shown as a mirror of the camera (see drawPreview), so x is flipped.
 const landmarkToWorld = (landmark: { x: number; y: number; z: number }) => ({
-  x: (landmark.x - 0.5) * 2,
+  x: (0.5 - landmark.x) * 2,
   y: -(landmark.y - 0.5) * 2,
   z: landmark.z * -2 - 2,
 });
@@ -92,7 +93,7 @@ export const HandFeedbackRings = ({ handData, scene }: HandFeedbackRingsProps) =
 
     if (handData.leftHand.isDetected) {
       leftRing.position.set(
-        handData.leftHand.position.x,
+        -handData.leftHand.position.x, // mirrored, like the camera preview
         handData.leftHand.position.y,
         handData.leftHand.position.z - 2
       );
@@ -116,7 +117,7 @@ export const HandFeedbackRings = ({ handData, scene }: HandFeedbackRingsProps) =
 
     if (handData.rightHand.isDetected) {
       rightRing.position.set(
-        handData.rightHand.position.x,
+        -handData.rightHand.position.x, // mirrored, like the camera preview
         handData.rightHand.position.y,
         handData.rightHand.position.z - 2
       );

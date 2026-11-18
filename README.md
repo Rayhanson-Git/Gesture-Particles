@@ -133,8 +133,12 @@ DOM and no MediaPipe involved, so it is covered by unit tests with synthetic han
   and 1. Over 0.5 counts as an open hand.
 - **Pinch** is thumb tip to index tip, in 3D, under 0.05.
 - **Rotation** comes from two lines: wrist to middle knuckle (x and y) and index knuckle to pinky knuckle (z).
-- **Handedness.** MediaPipe labels hands as if the picture were mirrored. The camera feed here is not, so MediaPipe's
-  "Left" is your right hand. That swap lives in one function, `personHand`, with a test of its own.
+- **Handedness.** MediaPipe's classic Hands build labels hands as if the picture were mirrored. The camera feed here is
+  not, so its "Left" is your right hand. That swap lives in one function, `personHand`, with a test of its own, and it
+  was checked against the model itself: MediaPipe's own photo of two left hands comes back labelled "Right" from the
+  pinned build, so the swap gives the right answer.
+- **Mirror view.** The camera preview, the rings that follow your hands and the force field are all shown as a mirror,
+  like any selfie camera: move your right hand to the right and they move right with it.
 
 **Particles.** Each shape is a list of x, y, z positions, made once when you pick it. They go to the GPU, and a vertex
 shader does the rest every frame: it blends from the old shape to the new one (with a small burst halfway), adds a
@@ -201,8 +205,6 @@ screenshots and the recording come from the real app in a headless browser.
 
 ## Status and limits
 
-- **The camera view is not mirrored.** The preview and the markers that follow your hands use the camera's own view,
-  as someone facing you would see it: raise your right hand and its marker appears on the left of the screen.
 - **A fist reads as a pinch**, because the thumb rests on the index fingertip, so a closed right hand shrinks the shape
   to its smallest.
 - **It uses MediaPipe's classic Hands build.** Google now recommends its newer Tasks API; moving to it would change
@@ -241,6 +243,8 @@ Fixed:
 - The camera preview canvas was resized, and so cleared, on every frame.
 - MediaPipe loaded from unpinned `<script>` tags on every visit; it is now pinned and loaded on demand.
 - The page used a placeholder title, a missing icon and a stock social image.
+- The camera preview, the hand rings and the force field were drawn unmirrored, so moving your right hand right
+  moved them left. They now behave like a mirror.
 
 Removed: unused dependencies (Supabase, `postprocessing`, two MediaPipe packages), an unused control panel and unused
 gesture detectors, and the editor metadata in `.bolt/`.
