@@ -138,7 +138,8 @@ DOM and no MediaPipe involved, so it is covered by unit tests with synthetic han
   was checked against the model itself: MediaPipe's own photo of two left hands comes back labelled "Right" from the
   pinned build, so the swap gives the right answer.
 - **Mirror view.** The camera preview, the rings that follow your hands and the force field are all shown as a mirror,
-  like any selfie camera: move your right hand to the right and they move right with it.
+  like any selfie camera: move your right hand to the right and they move right with it. A mirror also reverses turns
+  about the vertical and depth axes, so the wrist's y and z turns are negated before they reach the shape.
 
 **Particles.** Each shape is a list of x, y, z positions, made once when you pick it. They go to the GPU, and a vertex
 shader does the rest every frame: it blends from the old shape to the new one (with a small burst halfway), adds a

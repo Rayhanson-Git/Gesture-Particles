@@ -261,7 +261,9 @@ export const ThreeScene = forwardRef<SceneHandle, ThreeSceneProps>(function Thre
     }
     // left hand: tilt the wrist to turn the shape
     if (leftHand.isDetected) {
-      system.setTargetRotation(leftHand.rotation.x, leftHand.rotation.y, leftHand.rotation.z);
+      // The view is a mirror (x flipped), and a left-right flip reverses turns about the
+      // y and z axes, so those are negated to keep the shape turning with the hand you see.
+      system.setTargetRotation(leftHand.rotation.x, -leftHand.rotation.y, -leftHand.rotation.z);
     }
     // left hand: each new pinch moves to the next colour
     if (leftHand.isPinching && !lastPinchRef.current) cycleRef.current();
