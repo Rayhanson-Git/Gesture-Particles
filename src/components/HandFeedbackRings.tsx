@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { HandTrackingData } from '../hooks/useHandTracking';
+import type { HandTrackingData } from '../tracking/useHandTracking';
+import type { Landmark } from '../gestures/handMath';
 
 const landmarkToWorld = (landmark: { x: number; y: number; z: number }) => ({
   x: (landmark.x - 0.5) * 2,
@@ -152,7 +153,7 @@ export const HandFeedbackRings = ({ handData, scene }: HandFeedbackRingsProps) =
 };
 
 function updateFingerConnection(
-  landmarks: any[] | undefined,
+  landmarks: Landmark[] | undefined,
   isDetected: boolean,
   isPinching: boolean,
   line: THREE.Line | null,

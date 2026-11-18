@@ -35,10 +35,10 @@ export const PerformanceMonitor = ({ show }: PerformanceMonitorProps) => {
         setAvgFps(Math.round(avg));
       }
 
-      requestAnimationFrame(measureFPS);
+      animationId = requestAnimationFrame(measureFPS);
     };
 
-    const animationId = requestAnimationFrame(measureFPS);
+    let animationId = requestAnimationFrame(measureFPS);
 
     return () => cancelAnimationFrame(animationId);
   }, [show]);
@@ -48,7 +48,7 @@ export const PerformanceMonitor = ({ show }: PerformanceMonitorProps) => {
   const fpsColor = fps >= 55 ? 'text-green-400' : fps >= 30 ? 'text-yellow-400' : 'text-red-400';
 
   return (
-    <div className="fixed bottom-6 right-6 bg-black/30 backdrop-blur-md border border-white/10 rounded-2xl p-4 shadow-2xl w-48">
+    <div className="fixed top-28 right-6 bg-black/30 backdrop-blur-md border border-white/10 rounded-2xl p-4 shadow-2xl w-48">
       <div className="flex items-center gap-2 mb-3">
         <Activity size={16} className="text-white/60" />
         <h3 className="text-white text-sm font-light">Performance</h3>

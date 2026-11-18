@@ -1,9 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Camera, X, Maximize2, Minimize2 } from 'lucide-react';
-import { HandTrackingData } from '../hooks/useHandTracking';
+import type { HandTrackingData } from '../tracking/useHandTracking';
 
 interface CameraPreviewProps {
   handData: HandTrackingData;
+  /** Whether the camera is on; the preview button only appears once it is. */
+  running: boolean;
 }
 
 const MIN_WIDTH = 200;
@@ -11,7 +13,7 @@ const MIN_HEIGHT = 150;
 const DEFAULT_WIDTH = 320;
 const DEFAULT_HEIGHT = 240;
 
-export const CameraPreview = ({ handData }: CameraPreviewProps) => {
+export const CameraPreview = ({ handData, running }: CameraPreviewProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState({ x: 24, y: window.innerHeight - DEFAULT_HEIGHT - 24 });
   const [size, setSize] = useState({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT });
@@ -107,12 +109,15 @@ export const CameraPreview = ({ handData }: CameraPreviewProps) => {
     };
   }, [size, clampPosition]);
 
+  if (!running) return null;
+
   if (!isOpen) {
     return (
       <button
         onClick={() => setIsOpen(true)}
         className="fixed bottom-6 left-6 bg-gradient-to-r from-blue-500/80 to-cyan-500/80 hover:from-blue-600 hover:to-cyan-600 text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all duration-300 backdrop-blur-md border border-white/20"
         title="Open camera preview"
+        aria-label="Open camera preview"
       >
         <Camera size={24} />
       </button>
@@ -155,6 +160,7 @@ export const CameraPreview = ({ handData }: CameraPreviewProps) => {
           </button>
           <button
             onClick={() => setIsOpen(false)}
+            aria-label="Close camera preview"
             className="text-white/60 hover:text-white transition-colors"
           >
             <X size={18} />

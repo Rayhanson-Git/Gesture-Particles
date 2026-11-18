@@ -1,4 +1,7 @@
-import * as THREE from 'three';
+// Particle templates. Each one turns a particle count into a Float32Array of
+// x, y, z positions, roughly within a 3-unit radius of the origin.
+// The first eight are the originals; Heart, Knot, Vortex and Cube were added in
+// November 2026.
 
 export interface ParticleTemplate {
   id: string;
@@ -30,30 +33,6 @@ const generateCubePositions = (count: number): Float32Array => {
     positions[i * 3] = (Math.random() - 0.5) * size * 2;
     positions[i * 3 + 1] = (Math.random() - 0.5) * size * 2;
     positions[i * 3 + 2] = (Math.random() - 0.5) * size * 2;
-  }
-
-  return positions;
-};
-
-const generatePyramidPositions = (count: number): Float32Array => {
-  const positions = new Float32Array(count * 3);
-  const baseSize = 2;
-  const height = 3;
-
-  for (let i = 0; i < count; i++) {
-    const t = Math.random();
-    const u = Math.random();
-    const v = Math.random();
-
-    const scale = Math.pow(1 - t, 1/3);
-
-    const x = (u - 0.5) * baseSize * 2 * scale;
-    const y = t * height - height / 2;
-    const z = (v - 0.5) * baseSize * 2 * scale;
-
-    positions[i * 3] = x;
-    positions[i * 3 + 1] = y;
-    positions[i * 3 + 2] = z;
   }
 
   return positions;
@@ -205,7 +184,6 @@ const generateSaturnPositions = (count: number): Float32Array => {
   const ringThickness = 0.1;
 
   const sphereParticles = Math.floor(count * 0.6);
-  const ringParticles = count - sphereParticles;
 
   for (let i = 0; i < sphereParticles; i++) {
     const phi = Math.acos(2 * Math.random() - 1);
@@ -265,45 +243,70 @@ const generateAuroraPositions = (count: number): Float32Array => {
   return positions;
 };
 
-export const particleTemplates: ParticleTemplate[] = [
-  {
-    id: 'sphere',
-    name: 'Sphere',
-    generatePositions: generateSpherePositions
-  },
-  {
-    id: 'torus',
-    name: 'Torus',
-    generatePositions: generateTorusPositions
-  },
-  {
-    id: 'helix',
-    name: 'Helix',
-    generatePositions: generateHelixPositions
-  },
-  {
-    id: 'dna',
-    name: 'DNA',
-    generatePositions: generateDNAPositions
-  },
-  {
-    id: 'galaxy',
-    name: 'Galaxy',
-    generatePositions: generateGalaxyPositions
-  },
-  {
-    id: 'star',
-    name: 'Star',
-    generatePositions: generateStarPositions
-  },
-  {
-    id: 'saturn',
-    name: 'Saturn',
-    generatePositions: generateSaturnPositions
-  },
-  {
-    id: 'aurora',
-    name: 'Aurora',
-    generatePositions: generateAuroraPositions
+const generateHeartPositions = (count: number): Float32Array => {
+  // The classic heart curve, filled towards its outline and given some depth.
+  const positions = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const t = Math.random() * Math.PI * 2;
+    const fill = Math.pow(Math.random(), 0.35);
+    const hx = 16 * Math.pow(Math.sin(t), 3);
+    const hy = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+    const depth = (Math.random() - 0.5) * 0.9 * (1 - fill * 0.6);
+    positions[i * 3] = hx * 0.14 * fill;
+    positions[i * 3 + 1] = hy * 0.14 * fill + 0.35;
+    positions[i * 3 + 2] = depth;
   }
+  return positions;
+};
+
+const generateKnotPositions = (count: number): Float32Array => {
+  // A (2, 3) torus knot: a trefoil drawn as a glowing tube.
+  const positions = new Float32Array(count * 3);
+  const p = 2, q = 3, tube = 0.22;
+  for (let i = 0; i < count; i++) {
+    const t = Math.random() * Math.PI * 2;
+    const r = 1.6 + 0.7 * Math.cos(q * t);
+    const cx = r * Math.cos(p * t);
+    const cy = 0.7 * Math.sin(q * t) * 1.4;
+    const cz = r * Math.sin(p * t);
+    const a = Math.random() * Math.PI * 2;
+    const rr = tube * Math.sqrt(Math.random());
+    positions[i * 3] = cx + rr * Math.cos(a);
+    positions[i * 3 + 1] = cy + rr * Math.sin(a);
+    positions[i * 3 + 2] = cz + rr * Math.cos(a + 1.3);
+  }
+  return positions;
+};
+
+const generateVortexPositions = (count: number): Float32Array => {
+  // A tornado: a funnel that widens with height and twists as it rises.
+  const positions = new Float32Array(count * 3);
+  const height = 4.2;
+  for (let i = 0; i < count; i++) {
+    const h = Math.random();
+    const radius = 0.15 + h * h * 2.2 + (Math.random() - 0.5) * 0.25;
+    const angle = Math.random() * Math.PI * 2 + h * Math.PI * 6;
+    positions[i * 3] = radius * Math.cos(angle);
+    positions[i * 3 + 1] = h * height - height / 2;
+    positions[i * 3 + 2] = radius * Math.sin(angle);
+  }
+  return positions;
+};
+
+export const particleTemplates: ParticleTemplate[] = [
+  { id: 'sphere', name: 'Sphere', generatePositions: generateSpherePositions },
+  { id: 'torus', name: 'Torus', generatePositions: generateTorusPositions },
+  { id: 'helix', name: 'Helix', generatePositions: generateHelixPositions },
+  { id: 'dna', name: 'DNA', generatePositions: generateDNAPositions },
+  { id: 'galaxy', name: 'Galaxy', generatePositions: generateGalaxyPositions },
+  { id: 'star', name: 'Star', generatePositions: generateStarPositions },
+  { id: 'saturn', name: 'Saturn', generatePositions: generateSaturnPositions },
+  { id: 'aurora', name: 'Aurora', generatePositions: generateAuroraPositions },
+  { id: 'heart', name: 'Heart', generatePositions: generateHeartPositions },
+  { id: 'knot', name: 'Knot', generatePositions: generateKnotPositions },
+  { id: 'vortex', name: 'Vortex', generatePositions: generateVortexPositions },
+  { id: 'cube', name: 'Cube', generatePositions: generateCubePositions },
 ];
+
+export const templateById = (id: string): ParticleTemplate =>
+  particleTemplates.find((t) => t.id === id) ?? particleTemplates[0];

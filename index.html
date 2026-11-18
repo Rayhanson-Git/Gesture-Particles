@@ -2,17 +2,23 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>3D Particle System</title>
-    <meta property="og:image" content="https://bolt.new/static/og_default.png">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:image" content="https://bolt.new/static/og_default.png">
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-</head>
-  <body>
+    <title>Gesture Particles</title>
+    <meta name="description" content="A browser particle system you shape with your hands. Webcam hand tracking scales, turns, recolours and pushes thousands of glowing particles." />
+    <meta name="theme-color" content="#0a0a0a" />
+    <meta name="author" content="Harvey Rayhanson" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta property="og:title" content="Gesture Particles" />
+    <meta property="og:description" content="Move your hands. Reshape the scene." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://gesture-particles.rayhanson.tech/" />
+    <meta property="og:image" content="https://raw.githubusercontent.com/Rayhanson-Git/Gesture-Particles/main/assets/social.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://raw.githubusercontent.com/Rayhanson-Git/Gesture-Particles/main/assets/social.png" />
+  </head>
+  <body class="bg-[#0a0a0a]">
     <div id="root"></div>
+    <noscript>Gesture Particles needs JavaScript and WebGL.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

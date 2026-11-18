@@ -23,16 +23,16 @@ function rotatePoint(
   const cosY = Math.cos(ry), sinY = Math.sin(ry);
   const cosZ = Math.cos(rz), sinZ = Math.sin(rz);
 
-  let y1 = py * cosX - pz * sinX;
-  let z1 = py * sinX + pz * cosX;
-  let x1 = px;
+  const y1 = py * cosX - pz * sinX;
+  const z1 = py * sinX + pz * cosX;
+  const x1 = px;
 
-  let x2 = x1 * cosY + z1 * sinY;
-  let z2 = -x1 * sinY + z1 * cosY;
-  let y2 = y1;
+  const x2 = x1 * cosY + z1 * sinY;
+  const z2 = -x1 * sinY + z1 * cosY;
+  const y2 = y1;
 
-  let x3 = x2 * cosZ - y2 * sinZ;
-  let y3 = x2 * sinZ + y2 * cosZ;
+  const x3 = x2 * cosZ - y2 * sinZ;
+  const y3 = x2 * sinZ + y2 * cosZ;
 
   return [x3, y3, z2];
 }

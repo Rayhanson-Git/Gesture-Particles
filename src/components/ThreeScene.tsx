@@ -1,249 +1,277 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { ParticleSystem } from './ParticleSystem';
-import { particleTemplates } from '../utils/particleTemplates';
-import { HandTrackingData } from '../hooks/useHandTracking';
+import { ParticleSystem, SCALE_MAX } from '../particles/ParticleSystem';
+import { templateById } from '../particles/templates';
+import { gradientPresets } from '../particles/colors';
+import type { HandTrackingData } from '../tracking/useHandTracking';
+import type { Settings } from '../settings/settings';
+import { rightHandScale } from '../gestures/handMath';
 import { HandFeedbackRings } from './HandFeedbackRings';
 
-import { colorPresets } from '../utils/colorPresets';
+export interface SceneHandle {
+  /** Downloads the current frame as a PNG. */
+  saveImage: () => void;
+  /** Scale 1, no rotation. */
+  resetView: () => void;
+}
 
 interface ThreeSceneProps {
   handData: HandTrackingData;
-  selectedTemplate: string;
-  particleColor: string;
-  onColorChange: (color: string) => void;
-  bloomEnabled?: boolean;
-  bloomIntensity?: number;
-  particleSize?: number;
-  particleOpacity?: number;
-  pulsateIntensity?: number;
-  autoRotateSpeed?: number;
-  particleDensity?: number;
-  backgroundColor?: string;
-  showHandDots?: boolean;
+  settings: Settings;
+  /** A left-hand pinch, or a click on the scene, asks for the next colour. */
+  onCycleColor: () => void;
+  reduceMotion: boolean;
 }
 
-export const ThreeScene = ({
-  handData,
-  selectedTemplate,
-  particleColor,
-  onColorChange,
-  bloomEnabled = true,
-  bloomIntensity = 1,
-  particleSize = 0.03,
-  particleOpacity = 0.8,
-  pulsateIntensity = 0,
-  autoRotateSpeed = 0,
-  particleDensity = 15000,
-  backgroundColor = '#0a0a0a',
-  showHandDots = true
-}: ThreeSceneProps) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const sceneRef = useRef<THREE.Scene | null>(null);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const composerRef = useRef<EffectComposer | null>(null);
-  const bloomEffectRef = useRef<UnrealBloomPass | null>(null);
-  const particleSystemRef = useRef<ParticleSystem | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-  const lastPinchStateRef = useRef(false);
-  const [currentColorIndex, setCurrentColorIndex] = useState(0);
+// pointer controls
+const DRAG_ROTATE = 0.008; // radians per pixel dragged
+const WHEEL_ZOOM = 0.0015; // scale change per wheel unit (exponential)
+const CLICK_SLOP = 6; // pixels a click may move and still count as a click
+const CLICK_MS = 350;
 
+export const ThreeScene = forwardRef<SceneHandle, ThreeSceneProps>(function ThreeScene(
+  { handData, settings, onCycleColor, reduceMotion },
+  ref
+) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scene, setScene] = useState<THREE.Scene | null>(null);
+  const systemRef = useRef<ParticleSystem | null>(null);
+  const bloomRef = useRef<UnrealBloomPass | null>(null);
+  const renderRef = useRef<(() => void) | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // values the render loop reads every frame, kept in refs so the loop never goes stale
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const handsRef = useRef(handData);
+  handsRef.current = handData;
+  const cycleRef = useRef(onCycleColor);
+  cycleRef.current = onCycleColor;
+  const pointerRef = useRef<{ x: number; y: number } | null>(null);
+  const lastPinchRef = useRef(false);
+
+  // ------------------------------------------------------------ set up once
   useEffect(() => {
-    if (!containerRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
+    const s = settingsRef.current;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(backgroundColor);
-    sceneRef.current = scene;
-
-    const camera = new THREE.PerspectiveCamera(
-      75,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      1000
-    );
+    scene.background = new THREE.Color(s.backgroundColor);
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.z = 5;
-    cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    containerRef.current.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.domElement.setAttribute('aria-label', 'Particle scene. Drag to rotate, scroll or pinch to scale, click to change colour.');
+    renderer.domElement.style.touchAction = 'none';
+    container.appendChild(renderer.domElement);
+    canvasRef.current = renderer.domElement;
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-    scene.add(ambientLight);
-
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    directionalLight.position.set(5, 5, 5);
-    scene.add(directionalLight);
-
-    const particleSystem = new ParticleSystem(particleDensity);
-    scene.add(particleSystem.getMesh());
-    particleSystemRef.current = particleSystem;
-
-    const template = particleTemplates.find(t => t.id === selectedTemplate) || particleTemplates[0];
-    particleSystem.setTemplate(template.generatePositions(particleDensity));
+    // the template effect below fills it with particles
+    const system = new ParticleSystem();
+    scene.add(system.getMesh());
+    systemRef.current = system;
 
     const composer = new EffectComposer(renderer);
-    composerRef.current = composer;
+    composer.addPass(new RenderPass(scene, camera));
+    const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), s.bloomIntensity, 0.6, 0.7);
+    composer.addPass(bloom);
+    bloomRef.current = bloom;
 
-    const renderPass = new RenderPass(scene, camera);
-    composer.addPass(renderPass);
-
-    const bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),
-      bloomIntensity,
-      0.6,
-      0.7
-    );
-    bloomEffectRef.current = bloomPass;
-    composer.addPass(bloomPass);
-
-    const handleResize = () => {
-      if (!cameraRef.current || !rendererRef.current || !composerRef.current) return;
-
-      cameraRef.current.aspect = window.innerWidth / window.innerHeight;
-      cameraRef.current.updateProjectionMatrix();
-      rendererRef.current.setSize(window.innerWidth, window.innerHeight);
-      composerRef.current.setSize(window.innerWidth, window.innerHeight);
+    // the force field sits on the z = 0 plane, under the hand or the pointer
+    const ray = new THREE.Raycaster();
+    const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+    const hit = new THREE.Vector3();
+    const onPlane = (ndcX: number, ndcY: number) => {
+      ray.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
+      return ray.ray.intersectPlane(plane, hit) ? { x: hit.x, y: hit.y } : null;
     };
 
-    window.addEventListener('resize', handleResize);
+    const render = () => {
+      if (settingsRef.current.bloomEnabled) composer.render();
+      else renderer.render(scene, camera);
+    };
+    renderRef.current = render;
 
+    let frame = 0;
     const animate = () => {
-      animationFrameRef.current = requestAnimationFrame(animate);
-
-      if (particleSystemRef.current) {
-        particleSystemRef.current.update();
-
-        if (composerRef.current && bloomEnabled) {
-          composerRef.current.render();
-        } else if (sceneRef.current && cameraRef.current && rendererRef.current) {
-          rendererRef.current.render(sceneRef.current, cameraRef.current);
+      frame = requestAnimationFrame(animate);
+      const st = settingsRef.current;
+      const hands = handsRef.current;
+      let force: { x: number; y: number } | null = null;
+      if (st.forceField) {
+        const right = hands.rightHand;
+        if (right.isDetected && right.isOpen) {
+          // the same orientation as the hand rings: the camera picture is not mirrored
+          force = onPlane((right.palm.x - 0.5) * 2, -(right.palm.y - 0.5) * 2);
+        } else if (!hands.leftHand.isDetected && !right.isDetected && pointerRef.current) {
+          force = onPlane(pointerRef.current.x, pointerRef.current.y);
         }
       }
+      system.setForce(force);
+      system.update();
+      render();
     };
-
     animate();
 
+    const onResize = () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      composer.setSize(window.innerWidth, window.innerHeight);
+    };
+    window.addEventListener('resize', onResize);
+
+    // ---------------------------------------------- mouse and touch controls
+    const el = renderer.domElement;
+    const active = new Map<number, { x: number; y: number }>();
+    let down: { x: number; y: number; t: number } | null = null;
+    let pinchStart = 0;
+    let scaleAtPinch = 1;
+    const ndc = (e: PointerEvent | WheelEvent) => {
+      const r = el.getBoundingClientRect();
+      return { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 };
+    };
+    const spread = () => {
+      const [a, b] = [...active.values()];
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    };
+    const onDown = (e: PointerEvent) => {
+      el.setPointerCapture(e.pointerId);
+      active.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      down = active.size === 1 ? { x: e.clientX, y: e.clientY, t: performance.now() } : null;
+      if (active.size === 2) {
+        pinchStart = spread();
+        scaleAtPinch = system.getTargetScale();
+      }
+    };
+    const onMove = (e: PointerEvent) => {
+      pointerRef.current = e.pointerType === 'mouse' ? ndc(e) : null;
+      const prev = active.get(e.pointerId);
+      if (!prev) return;
+      active.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (active.size === 2 && pinchStart > 0) {
+        system.setTargetScale(Math.min(SCALE_MAX, Math.max(0.1, scaleAtPinch * (spread() / pinchStart))));
+      } else if (active.size === 1) {
+        system.nudgeRotation((e.clientY - prev.y) * DRAG_ROTATE, (e.clientX - prev.x) * DRAG_ROTATE);
+      }
+    };
+    const onUp = (e: PointerEvent) => {
+      active.delete(e.pointerId);
+      if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < CLICK_SLOP && performance.now() - down.t < CLICK_MS) {
+        cycleRef.current();
+      }
+      down = null;
+      if (active.size < 2) pinchStart = 0;
+    };
+    const onLeave = () => {
+      pointerRef.current = null;
+    };
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const next = system.getTargetScale() * Math.exp(-e.deltaY * WHEEL_ZOOM);
+      system.setTargetScale(Math.min(SCALE_MAX, Math.max(0.1, next)));
+    };
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointercancel', onUp);
+    el.addEventListener('pointerleave', onLeave);
+    el.addEventListener('wheel', onWheel, { passive: false });
+
+    setScene(scene);
+
     return () => {
-      window.removeEventListener('resize', handleResize);
-
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-
-      if (particleSystemRef.current) {
-        particleSystemRef.current.dispose();
-      }
-
-      if (rendererRef.current && containerRef.current) {
-        containerRef.current.removeChild(rendererRef.current.domElement);
-        rendererRef.current.dispose();
-      }
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', onResize);
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointercancel', onUp);
+      el.removeEventListener('pointerleave', onLeave);
+      el.removeEventListener('wheel', onWheel);
+      system.dispose();
+      bloom.dispose();
+      composer.dispose();
+      renderer.dispose();
+      el.remove();
+      systemRef.current = null;
+      setScene(null);
     };
   }, []);
 
-  useEffect(() => {
-    if (!particleSystemRef.current) return;
+  useImperativeHandle(ref, () => ({
+    saveImage: () => {
+      const canvas = canvasRef.current;
+      if (!canvas || !renderRef.current) return;
+      renderRef.current(); // draw now, so the buffer still holds the frame when it is read
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `gesture-particles-${settingsRef.current.template}.png`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      }, 'image/png');
+    },
+    resetView: () => systemRef.current?.resetView(),
+  }), []);
 
-    const template = particleTemplates.find(t => t.id === selectedTemplate);
-    if (template) {
-      particleSystemRef.current.setTemplate(template.generatePositions(particleDensity));
-    }
-  }, [selectedTemplate, particleDensity]);
+  // ------------------------------------------------------- settings → scene
+  const { template, particleDensity, color, gradient, backgroundColor, bloomIntensity, particleSize, particleOpacity, pulsateIntensity, autoRotateSpeed } = settings;
 
   useEffect(() => {
-    if (sceneRef.current) {
-      sceneRef.current.background = new THREE.Color(backgroundColor);
-    }
-  }, [backgroundColor]);
+    systemRef.current?.setTemplate(templateById(template).generatePositions(particleDensity));
+  }, [template, particleDensity]);
 
   useEffect(() => {
-    if (particleSystemRef.current) {
-      particleSystemRef.current.setColor(particleColor);
-    }
-  }, [particleColor]);
+    const g = gradientPresets.find((p) => p.id === gradient);
+    if (g) systemRef.current?.setGradient(g.from, g.to);
+    else systemRef.current?.setColor(color);
+  }, [color, gradient]);
 
   useEffect(() => {
-    if (bloomEffectRef.current) {
-      bloomEffectRef.current.strength = bloomIntensity;
-    }
+    if (scene) scene.background = new THREE.Color(backgroundColor);
+  }, [scene, backgroundColor]);
+
+  useEffect(() => {
+    if (bloomRef.current) bloomRef.current.strength = bloomIntensity;
   }, [bloomIntensity]);
 
-  useEffect(() => {
-    if (particleSystemRef.current) {
-      particleSystemRef.current.setSize(particleSize);
-    }
-  }, [particleSize]);
+  useEffect(() => systemRef.current?.setSize(particleSize), [particleSize]);
+  useEffect(() => systemRef.current?.setOpacity(particleOpacity), [particleOpacity]);
+  useEffect(() => systemRef.current?.setPulsateIntensity(pulsateIntensity), [pulsateIntensity]);
+  useEffect(() => systemRef.current?.setAutoRotateSpeed(autoRotateSpeed), [autoRotateSpeed]);
+  useEffect(() => systemRef.current?.setReduceMotion(reduceMotion), [reduceMotion]);
 
+  // ------------------------------------------------------------ hands → scene
   useEffect(() => {
-    if (particleSystemRef.current) {
-      particleSystemRef.current.setOpacity(particleOpacity);
-    }
-  }, [particleOpacity]);
-
-  useEffect(() => {
-    if (particleSystemRef.current) {
-      particleSystemRef.current.setPulsateIntensity(pulsateIntensity);
-    }
-  }, [pulsateIntensity]);
-
-  useEffect(() => {
-    if (particleSystemRef.current) {
-      particleSystemRef.current.setAutoRotateSpeed(autoRotateSpeed);
-    }
-  }, [autoRotateSpeed]);
-
-  useEffect(() => {
-    if (!particleSystemRef.current) return;
-
+    const system = systemRef.current;
+    if (!system) return;
     const { leftHand, rightHand } = handData;
 
+    // right hand: spread to grow, pinch to shrink
     if (rightHand.isDetected && rightHand.landmarks && rightHand.landmarks.length >= 21) {
-      let scale: number;
-
-      if (rightHand.isPinching) {
-        const thumb = rightHand.landmarks[4];
-        const index = rightHand.landmarks[8];
-        const dist = Math.sqrt(
-          (thumb.x - index.x) ** 2 +
-          (thumb.y - index.y) ** 2 +
-          (thumb.z - index.z) ** 2
-        );
-        const normalized = Math.min(1, dist / 0.15);
-        scale = 0.1 + normalized * 0.4;
-      } else {
-        scale = rightHand.openness * 6;
-      }
-
-      particleSystemRef.current.setTargetScale(scale);
+      system.setTargetScale(rightHandScale(rightHand.landmarks));
     }
-
+    // left hand: tilt the wrist to turn the shape
     if (leftHand.isDetected) {
-      particleSystemRef.current.setTargetRotation(
-        leftHand.rotation.x,
-        leftHand.rotation.y,
-        leftHand.rotation.z
-      );
+      system.setTargetRotation(leftHand.rotation.x, leftHand.rotation.y, leftHand.rotation.z);
     }
-
-    if (leftHand.isPinching && !lastPinchStateRef.current) {
-      const nextIndex = (currentColorIndex + 1) % colorPresets.length;
-      setCurrentColorIndex(nextIndex);
-      onColorChange(colorPresets[nextIndex].color);
-    }
-    lastPinchStateRef.current = leftHand.isPinching;
-  }, [handData, currentColorIndex, onColorChange]);
+    // left hand: each new pinch moves to the next colour
+    if (leftHand.isPinching && !lastPinchRef.current) cycleRef.current();
+    lastPinchRef.current = leftHand.isPinching;
+  }, [handData]);
 
   return (
     <>
       <div ref={containerRef} className="fixed inset-0 w-full h-full" />
-      {sceneRef.current && showHandDots && <HandFeedbackRings handData={handData} scene={sceneRef.current} />}
+      {scene && settings.showHandDots && <HandFeedbackRings handData={handData} scene={scene} />}
     </>
   );
-};
+});
